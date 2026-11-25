@@ -1,0 +1,377 @@
+{
+  "updatedAt": "2026-11-22T05:08:52.563Z",
+  "createdAt": "2026-11-22T05:08:52.563Z",
+  "id": "6uwPG5PmzckXAiBY",
+  "name": "Lead Automation — Error Handler (Sample 1) (EXPORT v4)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "parameters": {},
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1
+    },
+    {
+      "id": "extract",
+      "name": "Extract Error Info",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const j = $input.first().json;\nconst execution = j.execution || {};\nconst workflow = j.workflow || {};\nconst err = j.error || execution.error || {};\nreturn [{ json: {\n  execution_id: String(execution.id || j.executionId || ''),\n  workflow_name: String(workflow.name || j.workflowName || ''),\n  failed_node: String((err.node && err.node.name) || j.nodeName || ''),\n  error_message: String((err.message) || j.message || 'unknown error').slice(0, 500),\n  stage_failed: 'error_trigger',\n  status: 'pending',\n  created_at: new Date().toISOString(),\n  lead_id: '', name: '', phone_normalized: '', email_normalized: '', product: '',\n  budget_egp: '', band: '', score: '', contact_id: '', deal_id: '', retry_count: '0'\n}}];\n"
+      },
+      "position": [
+        200,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "prep-alert",
+      "name": "Prepare Error Alert",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { ...j, alert_text: 'Workflow error before lead was recorded. Execution ' + j.execution_id + ' in workflow ' + j.workflow_name + '. Error: ' + j.error_message + '. Recover the lead from the saved failed execution in n8n (Executions list).' } }];\n"
+      },
+      "position": [
+        600,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "err-dlq",
+      "name": "Error DLQ (Sheets)",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/FILL_SHEETS_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Dead_Letter_Queue",
+          "cachedResultName": "Dead_Letter_Queue"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "name": "={{ $json.name }}",
+            "phone_normalized": "={{ $json.phone_normalized }}",
+            "email_normalized": "={{ $json.email_normalized }}",
+            "product": "={{ $json.product }}",
+            "budget_egp": "={{ $json.budget_egp }}",
+            "band": "={{ $json.band }}",
+            "score": "={{ $json.score }}",
+            "stage_failed": "={{ $json.stage_failed }}",
+            "error_message": "={{ $json.error_message }}",
+            "contact_id": "={{ $json.contact_id }}",
+            "deal_id": "={{ $json.deal_id }}",
+            "status": "={{ $json.status }}",
+            "retry_count": "={{ $json.retry_count }}",
+            "created_at": "={{ $json.created_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone_normalized",
+              "displayName": "phone_normalized",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "product",
+              "displayName": "product",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "budget_egp",
+              "displayName": "budget_egp",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "band",
+              "displayName": "band",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage_failed",
+              "displayName": "stage_failed",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "deal_id",
+              "displayName": "deal_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "position": [
+        400,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2": {
+          "id": null,
+          "name": "Google Sheets — fill on import"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "err-alert",
+      "name": "Error Alert (Telegram)",
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "FILL_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.alert_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "position": [
+        800,
+        0
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Telegram Bot — fill on import"
+        }
+      },
+      "continueOnFail": true,
+      "webhookId": "d34eb1bb-297c-4d08-8306-43c35fa602a9"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Error Info": {
+      "main": [
+        [
+          {
+            "node": "Error DLQ (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error DLQ (Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Error Alert": {
+      "main": [
+        [
+          {
+            "node": "Error Alert (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "n8n_target_version": "2.48.7",
+    "note": "Honest limitation: the Error Trigger output does NOT contain the original lead payload. This workflow records the execution id / workflow / error and alerts. The lead itself is recovered from the saved failed execution in n8n (Save Failed Executions is enabled on the main workflow). Set this workflow as the Error Workflow in the main workflow settings after import."
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "cccdc688-b4f0-4ecd-9e16-07f1c5ec3ae9",
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-11-22T05:08:52.565Z",
+      "createdAt": "2026-11-22T05:08:52.565Z",
+      "role": "workflow:owner",
+      "workflowId": "6uwPG5PmzckXAiBY",
+      "projectId": "NVuingeDFWblm8EN",
+      "project": {
+        "updatedAt": "2026-11-22T03:57:49.120Z",
+        "createdAt": "2026-11-22T03:57:10.817Z",
+        "id": "NVuingeDFWblm8EN",
+        "name": "Test Local <test@example.local>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "6d768410-ebc7-4000-9aa9-5b9a6dac5686"
+      }
+    }
+  ],
+  "tags": [],
+  "parentFolder": null,
+  "activeVersion": null,
+  "scopes": [
+    "execution:delete",
+    "execution:list",
+    "execution:read",
+    "execution:reveal",
+    "workflow:create",
+    "workflow:delete",
+    "workflow:disableRedaction",
+    "workflow:enableRedaction",
+    "workflow:execute",
+    "workflow:execute-chat",
+    "workflow:export",
+    "workflow:import",
+    "workflow:list",
+    "workflow:move",
+    "workflow:publish",
+    "workflow:read",
+    "workflow:share",
+    "workflow:unpublish",
+    "workflow:unshare",
+    "workflow:update"
+  ],
+  "checksum": "6958190f504cda19f908a38d4c851372e2145f34678622f5d60a85e0f8f2216b"
+}

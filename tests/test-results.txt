@@ -1,0 +1,26 @@
+{
+  "total": 20,
+  "passed": 20,
+  "failed": 0,
+  "lost_leads_in_logic_test": 0
+}
+L01: score=90 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L02: score=100 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L03: score=60 band=Warm action=create_warm expected=create_warm pass=True dup=None
+L04: score=70 band=Warm action=create_warm expected=create_warm pass=True dup=None
+L05: score=0 band=Junk action=log_only expected=log_only pass=True dup=None
+L06: score=0 band=Junk action=log_only expected=log_only pass=True dup=None
+L07: score=100 band=Hot action=merge_duplicate expected=merge_duplicate pass=True dup=L01
+L08: score=80 band=Warm action=merge_duplicate expected=merge_duplicate pass=True dup=L02
+L09: score=60 band=Warm action=merge_duplicate expected=merge_duplicate pass=True dup=L03
+L10: score=30 band=Incomplete action=review_only expected=review_only pass=True dup=None
+L11: score=30 band=Incomplete action=review_only expected=review_only pass=True dup=None
+L12: score=90 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L13: score=70 band=Warm action=create_warm expected=create_warm pass=True dup=None
+L14: score=0 band=Junk action=log_only expected=log_only pass=True dup=None
+L15: score=90 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L16: score=90 band=Hot action=dead_letter_queue expected=dead_letter_queue pass=True dup=None
+L17: score=90 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L18: score=100 band=Hot action=create_hot expected=create_hot pass=True dup=None
+L19: score=0 band=Junk action=log_only expected=log_only pass=True dup=None
+L20: score=90 band=Hot action=create_hot expected=create_hot pass=True dup=None

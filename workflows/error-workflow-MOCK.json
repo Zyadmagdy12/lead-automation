@@ -1,0 +1,171 @@
+{
+  "name": "Lead Automation — Error Handler (Sample 1)",
+  "nodes": [
+    {
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "parameters": {},
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1
+    },
+    {
+      "id": "extract",
+      "name": "Extract Error Info",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const j = $input.first().json;\nconst execution = j.execution || {};\nconst workflow = j.workflow || {};\nconst err = j.error || execution.error || {};\nreturn [{ json: {\n  execution_id: String(execution.id || j.executionId || ''),\n  workflow_name: String(workflow.name || j.workflowName || ''),\n  failed_node: String((err.node && err.node.name) || j.nodeName || ''),\n  error_message: String((err.message) || j.message || 'unknown error').slice(0, 500),\n  stage_failed: 'error_trigger',\n  status: 'pending',\n  created_at: new Date().toISOString(),\n  lead_id: '', name: '', phone_normalized: '', email_normalized: '', product: '',\n  budget_egp: '', band: '', score: '', contact_id: '', deal_id: '', retry_count: '0'\n}}];\n"
+      },
+      "position": [
+        200,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "prep-alert",
+      "name": "Prepare Error Alert",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { ...j, alert_text: 'Workflow error before lead was recorded. Execution ' + j.execution_id + ' in workflow ' + j.workflow_name + '. Error: ' + j.error_message + '. Recover the lead from the saved failed execution in n8n (Executions list).' } }];\n"
+      },
+      "position": [
+        600,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "err-dlq",
+      "name": "Error DLQ (Mock Sheets)",
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5999/sheets/append",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ JSON.stringify({sheet: 'Dead_Letter_Queue', row: $json}) }}"
+      },
+      "position": [
+        400,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "err-alert",
+      "name": "Error Alert (Mock Telegram)",
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5999/telegram/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ JSON.stringify({chat_id: 'FILL', text: $json.alert_text}) }}"
+      },
+      "position": [
+        800,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Error Info": {
+      "main": [
+        [
+          {
+            "node": "Error DLQ (Mock Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error DLQ (Mock Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Error Alert": {
+      "main": [
+        [
+          {
+            "node": "Error Alert (Mock Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "n8n_target_version": "2.48.7",
+    "note": "Honest limitation: the Error Trigger output does NOT contain the original lead payload. This workflow records the execution id / workflow / error and alerts. The lead itself is recovered from the saved failed execution in n8n (Save Failed Executions is enabled on the main workflow). Set this workflow as the Error Workflow in the main workflow settings after import."
+  }
+}

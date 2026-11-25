@@ -1,0 +1,542 @@
+{
+  "name": "Lead Automation — SLA Follow-up (Sample 1)",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "SLA Check — Every Hour",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2
+    },
+    {
+      "id": "search-deals",
+      "name": "Search New Deals",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/deals/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ JSON.stringify({filterGroups: [{filters: [{propertyName: \"dealstage\", operator: \"EQ\", value: \"appointmentscheduled\"}]}], properties: [\"dealname\", \"dealstage\", \"createdate\", \"reminder_sent\", \"follow_up_due\", \"lead_score\", \"band\"], limit: 100}) }}"
+      },
+      "position": [
+        200,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "validate-search",
+      "name": "Validate Deal Search",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const res = $input.first().json;\nif (res.error) {\n  return [{ json: { has_error: true, error_message: String((res.error && res.error.message) || res.error), results: [] } }];\n}\nconst status = res.statusCode;\nconst body = res.body || {};\nif (status < 200 || status >= 300 || !Array.isArray(body.results)) {\n  return [{ json: { has_error: true, error_message: 'HubSpot deal search HTTP ' + status, results: [] } }];\n}\nreturn [{ json: { has_error: false, error_message: '', results: body.results } }];\n"
+      },
+      "position": [
+        400,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "search-error",
+      "name": "Search Failed?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-search-error",
+              "leftValue": "={{ $json.has_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        600,
+        -160
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "sla-due",
+      "name": "SLA Due?",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const j = $input.first().json;\nconst now = Date.now();\nconst out = [];\nfor (const d of (j.results || [])) {\n  const p = d.properties || {};\n  const band = p.band || '';\n  const threshold = band === 'Hot' ? 24 : band === 'Warm' ? 48 : null;\n  if (threshold === null) continue;\n  // NO dealstage check here on purpose (round 4): the HubSpot search filter\n  // in SLA_SEARCH_BODY is the SINGLE enforcement point for the New stage\n  // (it queries dealstage EQ STAGE_NEW_ID). A second hard-coded check here\n  // could drift from the search filter after a stage change in HubSpot and\n  // silently kill all reminders. A deal that left New is already excluded\n  // by the search itself -- proven by T11 (Hot Replied never reaches Due).\n  const reminded = p.reminder_sent === true || p.reminder_sent === 'true';\n  if (reminded) continue;\n  const created = new Date(p.createdate).getTime();\n  if (isNaN(created)) continue;\n  const ageH = (now - created) / 3600000;\n  if (ageH < threshold) continue;\n  // mark_body is pre-serialised here: n8n 2.48.7's expression parser rejects\n  // nested object literals ({properties: {...}}) with \"invalid syntax\".\n  out.push({ json: { deal_id: String(d.id), dealname: p.dealname || '', band: band,\n    threshold_hours: threshold, age_hours: Math.round(ageH), createdate: p.createdate,\n    mark_body: JSON.stringify({properties: {reminder_sent: \"true\", follow_up_due: \"true\"}}) } });\n}\nreturn out;\n"
+      },
+      "position": [
+        600,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "mark",
+      "name": "Mark reminder_sent (PATCH)",
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/deals/' + $json.deal_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ $json.mark_body }}"
+      },
+      "position": [
+        800,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "validate-mark",
+      "name": "Validate Mark",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items: SLA Due? can emit several deals per run.\n// (A $input.first() version silently dropped every deal after the first.)\nconst out = [];\nfor (const item of $input.all()) {\n  const paired = item.pairedItem;\n  const deal = $('SLA Due?').all()[paired ? paired.item : 0].json;\n  const res = item.json;\n  if (res.error) {\n    out.push({ json: { ...deal, mark_ok: false, error_message: String((res.error && res.error.message) || res.error) } });\n    continue;\n  }\n  const status = res.statusCode;\n  const body = res.body || {};\n  if (status < 200 || status >= 300 || !body.id) {\n    out.push({ json: { ...deal, mark_ok: false, error_message: 'HubSpot update deal HTTP ' + status } });\n    continue;\n  }\n  out.push({ json: { ...deal, mark_ok: true, error_message: '' } });\n}\nreturn out;\n"
+      },
+      "position": [
+        1000,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "mark-error",
+      "name": "Mark Failed?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-mark-error",
+              "leftValue": "={{ $json.mark_ok === false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        1200,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "prep-alert",
+      "name": "Prepare SLA Alert",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one alert per due deal).\nreturn $input.all().map(function(item){\n  const j = item.json;\n  return { json: { ...j, alert_text: 'SLA reminder: ' + j.dealname + ' — ' + j.band + ' — no reply in ' + j.threshold_hours + 'h' } };\n});\n"
+      },
+      "position": [
+        1400,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "check-tg",
+      "name": "Check Telegram Result",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one Telegram result per due deal).\nconst out = [];\nfor (const item of $input.all()) {\n  const paired = item.pairedItem;\n  const j = $('Prepare SLA Alert').all()[paired ? paired.item : 0].json;\n  const res = item.json;\n  const failed = !!res.error || (typeof res.statusCode === 'number' && (res.statusCode < 200 || res.statusCode >= 300));\n  out.push({ json: { ...j, telegram_failed: failed, telegram_error: failed ? String((res.error && res.error.message) || ('HTTP ' + res.statusCode)) : '' } });\n}\nreturn out;\n"
+      },
+      "position": [
+        1800,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "prep-audit",
+      "name": "Prepare SLA Audit Row",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one audit row per due deal).\nreturn $input.all().map(function(item){\n  const j = item.json;\n  return { json: {\n    deal_id: j.deal_id || '',\n    action: j.mark_ok === false ? 'mark_failed' : (j.has_error ? 'search_failed' : 'reminder_sent'),\n    band: j.band || '',\n    threshold_hours: String(j.threshold_hours || ''),\n    telegram_failed: j.telegram_failed ? 'true' : 'false',\n    created_at: new Date().toISOString()\n  }};\n});\n"
+      },
+      "position": [
+        2000,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "tg",
+      "name": "SLA Reminder (Telegram)",
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "FILL_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.alert_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "position": [
+        1600,
+        0
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Telegram Bot — fill on import"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "audit",
+      "name": "SLA Audit Log (Sheets)",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/FILL_SHEETS_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Audit_Log",
+          "cachedResultName": "Audit_Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "deal_id": "={{ $json.deal_id }}",
+            "action": "={{ $json.action }}",
+            "band": "={{ $json.band }}",
+            "threshold_hours": "={{ $json.threshold_hours }}",
+            "telegram_failed": "={{ $json.telegram_failed }}",
+            "created_at": "={{ $json.created_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "deal_id",
+              "displayName": "deal_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "action",
+              "displayName": "action",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "band",
+              "displayName": "band",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "threshold_hours",
+              "displayName": "threshold_hours",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telegram_failed",
+              "displayName": "telegram_failed",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "position": [
+        2200,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2": {
+          "id": null,
+          "name": "Google Sheets — fill on import"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "SLA Check — Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Search New Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search New Deals": {
+      "main": [
+        [
+          {
+            "node": "Validate Deal Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Deal Search": {
+      "main": [
+        [
+          {
+            "node": "Search Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Failed?": {
+      "main": [
+        [
+          {
+            "node": "Prepare SLA Audit Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SLA Due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLA Due?": {
+      "main": [
+        [
+          {
+            "node": "Mark reminder_sent (PATCH)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark reminder_sent (PATCH)": {
+      "main": [
+        [
+          {
+            "node": "Validate Mark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Mark": {
+      "main": [
+        [
+          {
+            "node": "Mark Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed?": {
+      "main": [
+        [
+          {
+            "node": "Prepare SLA Audit Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare SLA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SLA Alert": {
+      "main": [
+        [
+          {
+            "node": "SLA Reminder (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SLA Reminder (Telegram)": {
+      "main": [
+        [
+          {
+            "node": "Check Telegram Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Telegram Result": {
+      "main": [
+        [
+          {
+            "node": "Prepare SLA Audit Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SLA Audit Row": {
+      "main": [
+        [
+          {
+            "node": "SLA Audit Log (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveFailedExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "n8n_target_version": "2.48.7",
+    "note": "reminder_sent is marked in HubSpot BEFORE Telegram is sent, so a crash cannot produce a duplicate reminder. If Telegram then fails, the failure is recorded in the Audit Log and the reminder is not re-sent. Reply state = dealstage still equals the New stage id; moving the deal out of New stops reminders. Live HubSpot/Sheets/Telegram calls need user credentials."
+  }
+}

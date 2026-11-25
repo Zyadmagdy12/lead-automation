@@ -1,0 +1,62 @@
+[
+  {
+    "case": "SLA +24h Hot fires",
+    "got": [
+      [
+        "S01",
+        "reminder_sent"
+      ]
+    ],
+    "expected": [
+      [
+        "S01",
+        "reminder_sent"
+      ]
+    ],
+    "pass": true
+  },
+  {
+    "case": "SLA +25h no duplicate reminder",
+    "got": [],
+    "expected": [],
+    "pass": true
+  },
+  {
+    "case": "SLA +48h Warm + late Hot fire",
+    "got": [
+      [
+        "S03",
+        "reminder_sent"
+      ],
+      [
+        "S04",
+        "reminder_sent"
+      ],
+      [
+        "S06",
+        "reminder_sent"
+      ]
+    ],
+    "expected": [
+      [
+        "S03",
+        "reminder_sent"
+      ],
+      [
+        "S04",
+        "reminder_sent"
+      ],
+      [
+        "S06",
+        "reminder_sent"
+      ]
+    ],
+    "pass": true
+  },
+  {
+    "case": "SLA +49h no duplicate reminder",
+    "got": [],
+    "expected": [],
+    "pass": true
+  }
+]

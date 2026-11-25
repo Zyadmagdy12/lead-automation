@@ -1,0 +1,14 @@
+{
+  "total": 9,
+  "passed": 9,
+  "failed": 0
+}
+F01 HubSpot Contact fails, Sheets OK -> DLQ: got=dead_letter_queue expected=dead_letter_queue pass=True
+F02 HubSpot Contact OK, Deal fails, retry Deal only -> recovered: got=recovered_partial expected=recovered_partial pass=True
+F02 Contact created exactly once (distinct IDs): got=1 expected=1 pass=True
+F03 HubSpot fails AND Sheets fails -> Telegram fallback, not lost: got=telegram_fallback expected=telegram_fallback pass=True
+F04 Retry of already-created lead -> merged, no duplicate: got=merged expected=merged pass=True
+F04 Contact count still 1: got=1 expected=1 pass=True
+F05 Normal lead -> created: got=created expected=created pass=True
+F06 Lead created even if Telegram fails: got=created expected=created pass=True
+F06 Telegram failure is recorded, not fatal: got=False expected=False pass=True

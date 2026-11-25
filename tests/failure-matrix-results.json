@@ -1,0 +1,56 @@
+[
+  {
+    "case": "F01 HubSpot Contact fails, Sheets OK -> DLQ",
+    "got": "dead_letter_queue",
+    "expected": "dead_letter_queue",
+    "pass": true
+  },
+  {
+    "case": "F02 HubSpot Contact OK, Deal fails, retry Deal only -> recovered",
+    "got": "recovered_partial",
+    "expected": "recovered_partial",
+    "pass": true
+  },
+  {
+    "case": "F02 Contact created exactly once (distinct IDs)",
+    "got": 1,
+    "expected": 1,
+    "pass": true
+  },
+  {
+    "case": "F03 HubSpot fails AND Sheets fails -> Telegram fallback, not lost",
+    "got": "telegram_fallback",
+    "expected": "telegram_fallback",
+    "pass": true
+  },
+  {
+    "case": "F04 Retry of already-created lead -> merged, no duplicate",
+    "got": "merged",
+    "expected": "merged",
+    "pass": true
+  },
+  {
+    "case": "F04 Contact count still 1",
+    "got": 1,
+    "expected": 1,
+    "pass": true
+  },
+  {
+    "case": "F05 Normal lead -> created",
+    "got": "created",
+    "expected": "created",
+    "pass": true
+  },
+  {
+    "case": "F06 Lead created even if Telegram fails",
+    "got": "created",
+    "expected": "created",
+    "pass": true
+  },
+  {
+    "case": "F06 Telegram failure is recorded, not fatal",
+    "got": false,
+    "expected": false,
+    "pass": true
+  }
+]

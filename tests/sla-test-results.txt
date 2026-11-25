@@ -1,0 +1,9 @@
+{
+  "total": 4,
+  "passed": 4,
+  "failed": 0
+}
+SLA +24h Hot fires: got=[('S01', 'reminder_sent')] pass=True
+SLA +25h no duplicate reminder: got=[] pass=True
+SLA +48h Warm + late Hot fire: got=[('S03', 'reminder_sent'), ('S04', 'reminder_sent'), ('S06', 'reminder_sent')] pass=True
+SLA +49h no duplicate reminder: got=[] pass=True

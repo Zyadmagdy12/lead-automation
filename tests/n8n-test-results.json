@@ -1,0 +1,603 @@
+{
+  "passed": 58,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "T0 stage id defined exactly once in builders (single source of truth)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T0 pipeline id defined exactly once in builders",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T0 stage id uniform in all workflow JSONs (6 occurrences, one value)",
+      "pass": true,
+      "detail": 6
+    },
+    {
+      "name": "T0 pipeline id uniform in all workflow JSONs (4 occurrences, one value)",
+      "pass": true,
+      "detail": 4
+    },
+    {
+      "name": "T0 SLA Due? contains no dealstage re-check (search filter is the single gate)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T0 setup lists all DLQ columns incl. recovered_at",
+      "pass": true,
+      "detail": "   - `Dead_Letter_Queue`: lead_id, name, phone_normalized, email_normalized, product, budget_egp, band, score, stage_failed, error_message, contact_id, deal_id, status, retry_count, created_at, recovered_at"
+    },
+    {
+      "name": "import main MOCK workflow into n8n 2.48.7",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "activate main MOCK workflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T1 form submit accepted",
+      "pass": true,
+      "detail": "http 200"
+    },
+    {
+      "name": "T1 one contact created",
+      "pass": true,
+      "detail": [
+        {
+          "id": "c1001",
+          "properties": {
+            "email": "ahmed@example.com",
+            "phone": "201012345678",
+            "firstname": "Ahmed",
+            "lastname": "Ali"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T1 one deal created",
+      "pass": true,
+      "detail": [
+        {
+          "id": "d2001",
+          "properties": {
+            "dealname": "Ahmed Ali - CRM setup",
+            "amount": 5000,
+            "pipeline": "default",
+            "dealstage": "appointmentscheduled",
+            "lead_score": 100,
+            "band": "Hot",
+            "reminder_sent": "false",
+            "follow_up_due": "false",
+            "createdate": "2026-11-22T05:07:04.966Z",
+            "associated_contact": "c1001"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T1 deal associated to contact",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T1 sales telegram sent",
+      "pass": true,
+      "detail": [
+        {
+          "chat_id": "FILL",
+          "text": "New Hot lead: Ahmed Ali — CRM setup — 5000 EGP (score 100)",
+          "at": "2026-11-22T05:07:05.026Z"
+        }
+      ]
+    },
+    {
+      "name": "T1 audit row written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T2 no second contact (dedup by phone)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T2 no second deal for duplicate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T2 contact updated with new email",
+      "pass": true,
+      "detail": {
+        "email": "ahmed2@example.com",
+        "phone": "201012345678",
+        "firstname": "Ahmed",
+        "lastname": "A."
+      }
+    },
+    {
+      "name": "T2 merge audit row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T2 no sales telegram for duplicate",
+      "pass": true,
+      "detail": "telegram count 1"
+    },
+    {
+      "name": "T3 junk: no new contact",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T3 junk: no new deal",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T3 junk: audit logged_junk, no sales telegram",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T4 incomplete: no new contact",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T4 incomplete: audit logged_incomplete",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T5 contact failure: no contact created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T5 contact failure: no deal created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T5 contact failure: DLQ row pending",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T5 contact failure: failure telegram sent",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T6 deal failure: contact WAS created (partial success)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T6 deal failure: no deal created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T6 deal failure: DLQ row keeps contact_id",
+      "pass": true,
+      "detail": [
+        {
+          "lead_id": "lead-201077778888-1795324053",
+          "name": "FAIL_DEAL Omar",
+          "phone_normalized": "201077778888",
+          "email_normalized": "omar@example.com",
+          "product": "CRM setup",
+          "budget_egp": "8000",
+          "band": "Hot",
+          "score": "100",
+          "stage_failed": "create_deal",
+          "error_message": "500 - {\"message\":\"simulated deal create failure\"}",
+          "contact_id": "c1002",
+          "deal_id": "",
+          "status": "pending",
+          "retry_count": "0",
+          "created_at": "2026-11-22T05:07:33.568Z"
+        }
+      ]
+    },
+    {
+      "name": "T7 search failure: no contact created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T7 search failure: DLQ row (unknown stage)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "import DLQ recovery MOCK workflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T8 recovery: deal created for T6 row",
+      "pass": true,
+      "detail": [
+        {
+          "id": "d2001",
+          "properties": {
+            "dealname": "Ahmed Ali - CRM setup",
+            "amount": 5000,
+            "pipeline": "default",
+            "dealstage": "appointmentscheduled",
+            "lead_score": 100,
+            "band": "Hot",
+            "reminder_sent": "false",
+            "follow_up_due": "false",
+            "createdate": "2026-11-22T05:07:04.966Z",
+            "associated_contact": "c1001"
+          }
+        },
+        {
+          "id": "d2002",
+          "properties": {
+            "dealname": "FAIL_DEAL Omar - CRM setup",
+            "amount": 8000,
+            "pipeline": "default",
+            "dealstage": "appointmentscheduled",
+            "lead_score": 100,
+            "band": "Hot",
+            "reminder_sent": "false",
+            "follow_up_due": "false",
+            "createdate": "2026-11-22T05:08:05.944Z",
+            "associated_contact": "c1002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T8 recovery: no new contact created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T8 recovery: T6 row marked recovered",
+      "pass": true,
+      "detail": [
+        {
+          "lead_id": "lead-201077778888-1795324053",
+          "name": "FAIL_DEAL Omar",
+          "phone_normalized": "201077778888",
+          "email_normalized": "omar@example.com",
+          "product": "CRM setup",
+          "budget_egp": "8000",
+          "band": "Hot",
+          "score": "100",
+          "stage_failed": "create_deal",
+          "error_message": "",
+          "contact_id": "c1002",
+          "deal_id": "d2002",
+          "status": "recovered",
+          "retry_count": "0",
+          "created_at": "2026-11-22T05:07:33.568Z",
+          "recovered_at": "2026-11-22T05:08:05.987Z"
+        }
+      ]
+    },
+    {
+      "name": "T8b recovery: recovered deal associated to existing contact",
+      "pass": true,
+      "detail": [
+        {
+          "id": "d2002",
+          "properties": {
+            "dealname": "FAIL_DEAL Omar - CRM setup",
+            "amount": 8000,
+            "pipeline": "default",
+            "dealstage": "appointmentscheduled",
+            "lead_score": 100,
+            "band": "Hot",
+            "reminder_sent": "false",
+            "follow_up_due": "false",
+            "createdate": "2026-11-22T05:08:05.944Z",
+            "associated_contact": "c1002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T9 recovery: contact created for seeded row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T9 recovery: deal created for seeded row",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T9 recovery: seeded row marked recovered",
+      "pass": true,
+      "detail": [
+        {
+          "lead_id": "lead-seed9",
+          "name": "Mona H",
+          "phone_normalized": "201122233344",
+          "email_normalized": "mona@example.com",
+          "product": "CRM setup",
+          "budget_egp": "7000",
+          "band": "Hot",
+          "score": "90",
+          "stage_failed": "create_contact",
+          "error_message": "",
+          "contact_id": "c1003",
+          "deal_id": "d2003",
+          "status": "recovered",
+          "retry_count": "0",
+          "created_at": "2026-11-22T00:00:00Z",
+          "recovered_at": "2026-11-22T05:08:07.182Z"
+        }
+      ]
+    },
+    {
+      "name": "T9b recovery: recovered deal associated to newly created contact",
+      "pass": true,
+      "detail": [
+        [
+          {
+            "id": "d2003",
+            "properties": {
+              "dealname": "Mona H - CRM setup",
+              "amount": 7000,
+              "pipeline": "default",
+              "dealstage": "appointmentscheduled",
+              "lead_score": 90,
+              "band": "Hot",
+              "reminder_sent": "false",
+              "follow_up_due": "false",
+              "createdate": "2026-11-22T05:08:07.143Z",
+              "associated_contact": "c1003"
+            }
+          }
+        ],
+        [
+          {
+            "id": "c1003",
+            "properties": {
+              "email": "mona@example.com",
+              "phone": "201122233344",
+              "firstname": "Mona",
+              "lastname": "H"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "T10 recovery: failing row stays pending, retry_count +1",
+      "pass": true,
+      "detail": [
+        {
+          "lead_id": "lead-201055556666-1795324037",
+          "name": "Fail Contact",
+          "phone_normalized": "201055556666",
+          "email_normalized": "fail-contact@example.com",
+          "product": "CRM setup",
+          "budget_egp": "5000",
+          "band": "Hot",
+          "score": "100",
+          "stage_failed": "create_contact",
+          "error_message": "500 - {\"message\":\"simulated contact create failure\"}",
+          "contact_id": "",
+          "deal_id": "",
+          "status": "pending",
+          "retry_count": "2",
+          "created_at": "2026-11-22T05:07:17.506Z",
+          "recovered_at": ""
+        }
+      ]
+    },
+    {
+      "name": "T10 recovery: no duplicate contact from retry",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T13 assoc failure: deal still created",
+      "pass": true,
+      "detail": [
+        {
+          "id": "d2004",
+          "properties": {
+            "dealname": "Assoc Fail Sara - CRM setup",
+            "amount": 6000,
+            "pipeline": "default",
+            "dealstage": "appointmentscheduled",
+            "lead_score": 85,
+            "band": "Hot",
+            "reminder_sent": "false",
+            "follow_up_due": "false",
+            "createdate": "2026-11-22T05:08:08.237Z"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T13 assoc failure: no new contact created",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T13 assoc failure: row recovered with recovered_at set",
+      "pass": true,
+      "detail": [
+        {
+          "lead_id": "lead-seed13",
+          "name": "Assoc Fail Sara",
+          "phone_normalized": "201133344455",
+          "email_normalized": "sara13@example.com",
+          "product": "CRM setup",
+          "budget_egp": "6000",
+          "band": "Hot",
+          "score": "85",
+          "stage_failed": "create_deal",
+          "error_message": "HubSpot association failed: 404 - {\"message\":\"deal or contact not found\"}",
+          "contact_id": "c9999",
+          "deal_id": "d2004",
+          "status": "recovered",
+          "retry_count": "0",
+          "created_at": "2026-11-22T00:00:00Z",
+          "recovered_at": "2026-11-22T05:08:18.292Z"
+        }
+      ]
+    },
+    {
+      "name": "T13 assoc failure: row notes the association failure, deal left unassociated",
+      "pass": true,
+      "detail": [
+        [
+          {
+            "lead_id": "lead-seed13",
+            "name": "Assoc Fail Sara",
+            "phone_normalized": "201133344455",
+            "email_normalized": "sara13@example.com",
+            "product": "CRM setup",
+            "budget_egp": "6000",
+            "band": "Hot",
+            "score": "85",
+            "stage_failed": "create_deal",
+            "error_message": "HubSpot association failed: 404 - {\"message\":\"deal or contact not found\"}",
+            "contact_id": "c9999",
+            "deal_id": "d2004",
+            "status": "recovered",
+            "retry_count": "0",
+            "created_at": "2026-11-22T00:00:00Z",
+            "recovered_at": "2026-11-22T05:08:18.292Z"
+          }
+        ],
+        [
+          {
+            "id": "d2004",
+            "properties": {
+              "dealname": "Assoc Fail Sara - CRM setup",
+              "amount": 6000,
+              "pipeline": "default",
+              "dealstage": "appointmentscheduled",
+              "lead_score": 85,
+              "band": "Hot",
+              "reminder_sent": "false",
+              "follow_up_due": "false",
+              "createdate": "2026-11-22T05:08:08.237Z"
+            }
+          }
+        ]
+      ]
+    },
+    {
+      "name": "import SLA MOCK workflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T11 SLA: exactly 2 deals marked (Hot Old, Warm Old)",
+      "pass": true,
+      "detail": [
+        {
+          "method": "PATCH",
+          "path": "/crm/v3/objects/deals/d2005",
+          "body": {
+            "properties": {
+              "reminder_sent": "true",
+              "follow_up_due": "true"
+            }
+          },
+          "status": 200,
+          "at": "2026-11-22T05:08:18.710Z"
+        },
+        {
+          "method": "PATCH",
+          "path": "/crm/v3/objects/deals/d2006",
+          "body": {
+            "properties": {
+              "reminder_sent": "true",
+              "follow_up_due": "true"
+            }
+          },
+          "status": 200,
+          "at": "2026-11-22T05:08:18.715Z"
+        }
+      ]
+    },
+    {
+      "name": "T11 SLA: 2 reminder telegrams",
+      "pass": true,
+      "detail": [
+        {
+          "chat_id": "FILL",
+          "text": "SLA reminder: Hot Old — Hot — no reply in 24h",
+          "at": "2026-11-22T05:08:18.895Z"
+        },
+        {
+          "chat_id": "FILL",
+          "text": "SLA reminder: Warm Old — Warm — no reply in 48h",
+          "at": "2026-11-22T05:08:18.900Z"
+        }
+      ]
+    },
+    {
+      "name": "T11 SLA: Hot Old reminder_sent=true in mock",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T11 SLA: Hot Fresh NOT reminded",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T11 SLA re-run: no duplicate reminders",
+      "pass": true,
+      "detail": "telegram 6 -> 6"
+    },
+    {
+      "name": "T12 telegram failure: reminder_sent still marked true",
+      "pass": true,
+      "detail": [
+        {
+          "id": "d2010",
+          "properties": {
+            "dealname": "FAIL_TELEGRAM Deal",
+            "dealstage": "appointmentscheduled",
+            "createdate": "2026-11-20T23:08:20.888909Z",
+            "reminder_sent": "true",
+            "follow_up_due": "true",
+            "band": "Hot"
+          }
+        }
+      ]
+    },
+    {
+      "name": "T12 telegram failure: no telegram recorded for it",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T12 telegram failure: audit row records telegram_failed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "T12 re-run: still no re-reminder",
+      "pass": true,
+      "detail": ""
+    }
+  ]
+}

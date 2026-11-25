@@ -1,0 +1,1122 @@
+{
+  "name": "Lead Automation — DLQ Recovery (Sample 1)",
+  "nodes": [
+    {
+      "id": "manual",
+      "name": "Manual Trigger",
+      "parameters": {},
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1
+    },
+    {
+      "id": "read-dlq",
+      "name": "Read DLQ Rows",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/FILL_SHEETS_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Dead_Letter_Queue",
+          "cachedResultName": "Dead_Letter_Queue"
+        },
+        "options": {}
+      },
+      "position": [
+        200,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2": {
+          "id": null,
+          "name": "Google Sheets — fill on import"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "filter",
+      "name": "Filter Pending Rows",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const rows = $input.all().map(function(i){ return i.json; });\nconst out = [];\nfor (const r of rows) {\n  if (String(r.status || '').toLowerCase() !== 'pending') continue;\n  const retry = Number(r.retry_count) || 0;\n  if (retry >= 3) continue;\n  out.push({ json: (function(){\n    const first = String(r.name || '').split(/\\s+/)[0] || '';\n    const last = String(r.name || '').split(/\\s+/).slice(1).join(' ') || '';\n    // HubSpot bodies pre-serialised here (real JS): n8n 2.48.7's expression\n    // parser rejects nested object literals ({properties: {...}}).\n    const contactBody = JSON.stringify({properties: {email: r.email_normalized || '', phone: r.phone_normalized || '', firstname: first, lastname: last}});\n    const dealBody = JSON.stringify({properties: {dealname: (r.name || '') + ' - ' + (r.product || ''), amount: Number(r.budget_egp) || 0, pipeline: 'default', dealstage: 'appointmentscheduled', lead_score: Number(r.score) || 0, band: r.band || '', reminder_sent: 'false', follow_up_due: 'false'}});\n    return {\n    lead_id: r.lead_id || '', name: r.name || '', phone_normalized: r.phone_normalized || '',\n    email_normalized: r.email_normalized || '', product: r.product || '',\n    budget_egp: Number(r.budget_egp) || 0, band: r.band || '', score: Number(r.score) || 0,\n    stage_failed: r.stage_failed || '', error_message: r.error_message || '',\n    contact_id: r.contact_id || '', deal_id: r.deal_id || '', retry_count: retry,\n    created_at: r.created_at || '',\n    has_contact: !!(r.contact_id || ''),\n    dlq_stage_failed: r.stage_failed || '',\n    firstname: first,\n    lastname: last,\n    create_contact_body: contactBody, update_contact_body: contactBody,\n    create_deal_body: dealBody,\n    source: 'dlq-recovery'\n  };})()});\n}\nreturn out;\n"
+      },
+      "position": [
+        400,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "has-contact",
+      "name": "Has Contact Already?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-contact",
+              "leftValue": "={{ $json.has_contact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        600,
+        -160
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "search",
+      "name": "Search Contact by Phone/Email",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ JSON.stringify({filterGroups: [{filters: [{propertyName: \"phone\", operator: \"EQ\", value: $json.phone_normalized}]}, {filters: [{propertyName: \"email\", operator: \"EQ\", value: $json.email_normalized}]}], properties: [\"email\", \"phone\", \"firstname\", \"lastname\"], limit: 10}) }}"
+      },
+      "position": [
+        600,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "merge-search",
+      "name": "Merge Search Result",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "position": [
+        800,
+        0
+      ],
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3
+    },
+    {
+      "id": "validate-search",
+      "name": "Validate Recovery Search",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items: several DLQ rows can be pending at once.\n// (A $input.first() version silently dropped every row after the first.)\nconst out = [];\nfor (const item of $input.all()) {\n  // item.json is the MERGED item: lead fields + HTTP response fields.\n  // Strip the response envelope before spreading: a stale `body` would\n  // deep-merge into the NEXT validator's res.body (proven: a contact\n  // response body.id overwrote the deal response body.id).\n  const strip = function(o){ const c = Object.assign({}, o); delete c.body; delete c.statusCode; delete c.statusMessage; delete c.headers; delete c.error; return c; };\n  const lead = strip(item.json);\n  const res = item.json;\n  if (res.error) {\n    out.push({ json: { ...lead, has_error: true, error_message: String((res.error && res.error.message) || res.error), match_count: 0, is_duplicate: false, match_id: null } });\n    continue;\n  }\n  const status = res.statusCode;\n  const body = res.body || {};\n  if (status < 200 || status >= 300 || !Array.isArray(body.results)) {\n    out.push({ json: { ...lead, has_error: true, error_message: 'HubSpot search HTTP ' + status, match_count: 0, is_duplicate: false, match_id: null } });\n    continue;\n  }\n  const results = body.results;\n  const match = results[0] || null;\n  out.push({ json: { ...lead, has_error: false, error_message: '', match_count: results.length, is_duplicate: results.length > 0, match_id: match ? String(match.id) : null } });\n}\nreturn out;\n"
+      },
+      "position": [
+        1000,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "search-error",
+      "name": "Search Failed?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-search-error",
+              "leftValue": "={{ $json.has_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        1200,
+        -160
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "is-dup",
+      "name": "Is Duplicate?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-is-dup",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        1200,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "update-contact",
+      "name": "Update Contact (PATCH)",
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/contacts/' + $json.match_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ $json.update_contact_body }}"
+      },
+      "position": [
+        1200,
+        -160
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "create-contact",
+      "name": "Create Contact (POST)",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ $json.create_contact_body }}"
+      },
+      "position": [
+        1200,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "merge-update",
+      "name": "Merge Update Result",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "position": [
+        1600,
+        -160
+      ],
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3
+    },
+    {
+      "id": "merge-create",
+      "name": "Merge Create Result",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "position": [
+        1600,
+        0
+      ],
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3
+    },
+    {
+      "id": "validate-contact",
+      "name": "Validate Recovery Contact",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one per pending DLQ row).\nconst out = [];\nfor (const item of $input.all()) {\n  // item.json is the MERGED item: lead fields + HTTP response fields.\n  // Strip the response envelope before spreading: a stale `body` would\n  // deep-merge into the NEXT validator's res.body (proven: a contact\n  // response body.id overwrote the deal response body.id).\n  const strip = function(o){ const c = Object.assign({}, o); delete c.body; delete c.statusCode; delete c.statusMessage; delete c.headers; delete c.error; return c; };\n  const base = strip(item.json);\n  const res = item.json;\n  if (res.error) {\n    out.push({ json: { ...base, has_error: true, error_message: String((res.error && res.error.message) || res.error), stage_failed: 'recovery_contact' } });\n    continue;\n  }\n  const status = res.statusCode;\n  const body = res.body || {};\n  if (status < 200 || status >= 300 || !body.id) {\n    out.push({ json: { ...base, has_error: true, error_message: 'HubSpot contact HTTP ' + status, stage_failed: 'recovery_contact' } });\n    continue;\n  }\n  out.push({ json: { ...base, has_error: false, error_message: '', contact_id: String(body.id) } });\n}\nreturn out;\n"
+      },
+      "position": [
+        1800,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "contact-error",
+      "name": "Contact Failed?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-contact-error",
+              "leftValue": "={{ $json.has_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        2000,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "prep-deal",
+      "name": "Prepare Deal",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all().map(function(i){ return {json: i.json}; });"
+      },
+      "position": [
+        1700,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "create-deal",
+      "name": "Create Deal (POST)",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "={{ $json.create_deal_body }}"
+      },
+      "position": [
+        2400,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "merge-deal",
+      "name": "Merge Deal Result",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "position": [
+        2600,
+        0
+      ],
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3
+    },
+    {
+      "id": "validate-deal",
+      "name": "Validate Recovery Deal",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one per pending DLQ row).\nconst out = [];\nfor (const item of $input.all()) {\n  // item.json is the MERGED item: lead fields + HTTP response fields.\n  // Strip the response envelope before spreading: a stale `body` would\n  // deep-merge into the NEXT validator's res.body (proven: a contact\n  // response body.id overwrote the deal response body.id).\n  const strip = function(o){ const c = Object.assign({}, o); delete c.body; delete c.statusCode; delete c.statusMessage; delete c.headers; delete c.error; return c; };\n  const base = strip(item.json);\n  const res = item.json;\n  if (res.error) {\n    out.push({ json: { ...base, has_error: true, error_message: String((res.error && res.error.message) || res.error), stage_failed: 'recovery_deal' } });\n    continue;\n  }\n  const status = res.statusCode;\n  const body = res.body || {};\n  if (status < 200 || status >= 300 || !body.id) {\n    out.push({ json: { ...base, has_error: true, error_message: 'HubSpot deal HTTP ' + status, stage_failed: 'recovery_deal' } });\n    continue;\n  }\n  out.push({ json: { ...base, has_error: false, error_message: '', deal_id: String(body.id) } });\n}\nreturn out;\n"
+      },
+      "position": [
+        2800,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "deal-error",
+      "name": "Deal Failed?",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-deal-error",
+              "leftValue": "={{ $json.has_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "filter.operator.boolean.true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true
+      },
+      "position": [
+        3000,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2
+    },
+    {
+      "id": "associate",
+      "name": "Associate Deal to Contact (PUT)",
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/deals/' + $json.deal_id + '/associations/contacts/' + $json.contact_id + '/deal_to_contact' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "jsonBody": "{}"
+      },
+      "position": [
+        3200,
+        0
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": null,
+          "name": "HubSpot Service Key"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "merge-assoc",
+      "name": "Merge Association Result",
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "position": [
+        3400,
+        0
+      ],
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3
+    },
+    {
+      "id": "validate-assoc",
+      "name": "Validate Recovery Association",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one per recovered deal).\n// Association failure is NON-FATAL on purpose (round 4): the Deal already\n// exists and the Contact already exists, so the row is still recovered --\n// retrying would create a SECOND Deal (recovery dedup only re-checks the\n// Contact). The failure is recorded in error_message so a human sees it in\n// the DLQ row; the PUT itself is idempotent and retries 3x at node level.\n// Input is the MERGED item: lead fields + HTTP response fields; the response\n// envelope is stripped before spreading (same stale-body hazard as the other\n// recovery validators).\nconst out = [];\nfor (const item of $input.all()) {\n  const strip = function(o){ const c = Object.assign({}, o); delete c.body; delete c.statusCode; delete c.statusMessage; delete c.headers; delete c.error; return c; };\n  const base = strip(item.json);\n  const res = item.json;\n  if (res.error) {\n    out.push({ json: { ...base, has_error: false, association_ok: false, association_failed: true, error_message: 'HubSpot association failed: ' + String((res.error && res.error.message) || res.error) } });\n    continue;\n  }\n  const status = res.statusCode;\n  if (typeof status === 'number' && (status < 200 || status >= 300)) {\n    out.push({ json: { ...base, has_error: false, association_ok: false, association_failed: true, error_message: 'HubSpot association HTTP ' + status } });\n    continue;\n  }\n  out.push({ json: { ...base, has_error: false, association_ok: true, association_failed: false, error_message: '' } });\n}\nreturn out;\n"
+      },
+      "position": [
+        3600,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "mark",
+      "name": "Mark Row Recovered / Retry",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Loops over ALL input items (one mark per pending DLQ row).\nreturn $input.all().map(function(item){\nconst j = item.json;\nconst ok = !j.has_error;\nreturn { json: {\n  lead_id: j.lead_id || '',\n  name: j.name || '',\n  phone_normalized: j.phone_normalized || '',\n  email_normalized: j.email_normalized || '',\n  product: j.product || '',\n  budget_egp: String(j.budget_egp || ''),\n  band: j.band || '',\n  score: String(j.score || ''),\n  stage_failed: j.dlq_stage_failed || j.stage_failed || '',\n  error_message: String(j.error_message || '').slice(0, 500),\n  contact_id: j.contact_id || '',\n  deal_id: j.deal_id || '',\n  status: ok ? 'recovered' : 'pending',\n  retry_count: String((Number(j.retry_count) || 0) + (ok ? 0 : 1)),\n  created_at: j.created_at || '',\n  recovered_at: ok ? new Date().toISOString() : ''\n}};\n});\n"
+      },
+      "position": [
+        3800,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "mark-row",
+      "name": "Update DLQ Row (Sheets)",
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/FILL_SHEETS_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Dead_Letter_Queue",
+          "cachedResultName": "Dead_Letter_Queue"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "name": "={{ $json.name }}",
+            "phone_normalized": "={{ $json.phone_normalized }}",
+            "email_normalized": "={{ $json.email_normalized }}",
+            "product": "={{ $json.product }}",
+            "budget_egp": "={{ $json.budget_egp }}",
+            "band": "={{ $json.band }}",
+            "score": "={{ $json.score }}",
+            "stage_failed": "={{ $json.stage_failed }}",
+            "error_message": "={{ $json.error_message }}",
+            "contact_id": "={{ $json.contact_id }}",
+            "deal_id": "={{ $json.deal_id }}",
+            "status": "={{ $json.status }}",
+            "retry_count": "={{ $json.retry_count }}",
+            "created_at": "={{ $json.created_at }}",
+            "recovered_at": "={{ $json.recovered_at }}"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone_normalized",
+              "displayName": "phone_normalized",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email_normalized",
+              "displayName": "email_normalized",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "product",
+              "displayName": "product",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "budget_egp",
+              "displayName": "budget_egp",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "band",
+              "displayName": "band",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage_failed",
+              "displayName": "stage_failed",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "contact_id",
+              "displayName": "contact_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "deal_id",
+              "displayName": "deal_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "retry_count",
+              "displayName": "retry_count",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recovered_at",
+              "displayName": "recovered_at",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "position": [
+        4000,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2": {
+          "id": null,
+          "name": "Google Sheets — fill on import"
+        }
+      },
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read DLQ Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read DLQ Rows": {
+      "main": [
+        [
+          {
+            "node": "Filter Pending Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Pending Rows": {
+      "main": [
+        [
+          {
+            "node": "Has Contact Already?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Contact Already?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Contact by Phone/Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Search Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Search Contact by Phone/Email": {
+      "main": [
+        [
+          {
+            "node": "Merge Search Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Search Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Recovery Search": {
+      "main": [
+        [
+          {
+            "node": "Search Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Failed?": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Recovered / Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Update Contact (PATCH)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Update Result",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Create Contact (POST)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Create Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Update Contact (PATCH)": {
+      "main": [
+        [
+          {
+            "node": "Merge Update Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Contact (POST)": {
+      "main": [
+        [
+          {
+            "node": "Merge Create Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Update Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Create Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Recovery Contact": {
+      "main": [
+        [
+          {
+            "node": "Contact Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Failed?": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Recovered / Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deal": {
+      "main": [
+        [
+          {
+            "node": "Create Deal (POST)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Deal Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create Deal (POST)": {
+      "main": [
+        [
+          {
+            "node": "Merge Deal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Deal Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Recovery Deal": {
+      "main": [
+        [
+          {
+            "node": "Deal Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deal Failed?": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Recovered / Retry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Associate Deal to Contact (PUT)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Association Result",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Associate Deal to Contact (PUT)": {
+      "main": [
+        [
+          {
+            "node": "Merge Association Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Association Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Recovery Association",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Recovery Association": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Recovered / Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Row Recovered / Retry": {
+      "main": [
+        [
+          {
+            "node": "Update DLQ Row (Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveFailedExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "n8n_target_version": "2.48.7",
+    "note": "Manual retry mechanism for the Dead-Letter Queue. Rows with status=pending and retry_count<3 are re-processed: dedup is re-checked first, so a retry can never create a duplicate Contact/Deal. A row that already has a contact_id skips contact creation and only creates the Deal (partial-success recovery) -- and associates it to the Contact (PUT, same as the main workflow). Rows that fail again stay pending with retry_count+1 (max 3 attempts). A failed association does NOT block recovery: the Deal exists, so the row is marked recovered with the failure noted in error_message. No automatic in-workflow retry loop: the main workflow retries transient HTTP failures 3x via node-level retryOnFail; business retry is this workflow, run manually or on a schedule."
+  }
+}
